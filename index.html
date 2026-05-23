@@ -1,0 +1,1001 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Event Poster — X + Nostr post generator</title>
+<meta name="description" content="A free, self-contained tool to turn Luma events into X + Nostr post campaigns." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0d10'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23f7931a'/%3E%3C/svg%3E" />
+<style>
+  :root{
+    --bg:#0b0d10; --panel:#121519; --panel-2:#181c22; --border:#23282f;
+    --text:#e7e9ec; --muted:#8b95a1; --accent:#f7931a; --accent-2:#ffb347;
+    --ok:#22c55e; --warn:#ef4444; --x:#1d9bf0; --xlong:#67e8f9; --nostr:#9b59ff;
+    --radius:14px; --shadow:0 1px 0 rgba(255,255,255,.04), 0 24px 48px -24px rgba(0,0,0,.6);
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Inter, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--font);line-height:1.5;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px}
+  header{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:24px}
+  .brand{display:flex;flex-direction:column;gap:6px}
+  .logo{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:20px;letter-spacing:.2px}
+  .logo .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(247,147,26,.18)}
+  .subtitle{color:var(--muted);font-size:13px}
+  .header-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;gap:6px;background:var(--panel);color:var(--text);border:1px solid var(--border);padding:8px 12px;border-radius:10px;font:inherit;font-size:13px;cursor:pointer;transition:all .15s ease}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.primary{background:var(--accent);color:#0b0d10;border-color:var(--accent);font-weight:600}
+  .btn.primary:hover{background:var(--accent-2);border-color:var(--accent-2);color:#0b0d10}
+  .btn.ghost{background:transparent}
+  .btn.small{padding:4px 8px;font-size:12px;border-radius:8px}
+
+  .grid{display:grid;grid-template-columns:380px 1fr;gap:20px}
+  @media (max-width:900px){.grid{grid-template-columns:1fr}}
+
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .panel h2{margin:0;padding:14px 16px;border-bottom:1px solid var(--border);font-size:14px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted)}
+  .panel-body{padding:14px 16px}
+
+  label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:10px 0 6px}
+  input[type=text], input[type=datetime-local], textarea, select{
+    width:100%;background:var(--panel-2);color:var(--text);border:1px solid var(--border);
+    border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;outline:none;transition:border-color .15s
+  }
+  input:focus, textarea:focus, select:focus{border-color:var(--accent)}
+  textarea{min-height:80px;resize:vertical;font-family:var(--mono);font-size:13px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  .import-status{font-size:12px;color:var(--muted);margin-top:8px}
+  .import-status.ok{color:var(--ok)}
+  .import-status.warn{color:var(--warn)}
+
+  .seed{display:flex;gap:8px;flex-wrap:wrap;padding:0 16px 14px}
+  .seed .btn{flex:1 1 auto;justify-content:flex-start;text-align:left;line-height:1.25;font-size:12px}
+  .seed .btn b{display:block;color:var(--text);font-weight:600;font-size:13px}
+  .seed .btn span{color:var(--muted)}
+
+  .toneset{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px}
+  .toneset label{margin:0;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--panel-2);cursor:pointer;display:flex;flex-direction:column;gap:2px;font-size:13px;text-transform:none;letter-spacing:0;color:var(--text);font-weight:600}
+  .toneset label.on{border-color:var(--accent);background:rgba(247,147,26,.08)}
+  .toneset input{display:none}
+  .toneset .tone-desc{display:block;color:var(--muted);font-size:11px;margin-top:0;font-weight:400}
+
+  .stages{display:flex;flex-direction:column;gap:16px}
+  .stage{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+  .stage-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--panel-2)}
+  .stage-head .title{display:flex;align-items:center;gap:10px;font-weight:600}
+  .stage-head .when{font-size:12px;color:var(--muted)}
+  .badge{font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(247,147,26,.12);color:var(--accent);text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+
+  .posts{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0}
+  @media (max-width:780px){.posts{grid-template-columns:1fr}}
+  .post{padding:14px 16px;border-top:1px solid var(--border)}
+  .post + .post{border-left:1px solid var(--border)}
+  @media (max-width:780px){.post + .post{border-left:none}}
+  .post-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .post-head .net{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;letter-spacing:.3px}
+  .net.x{color:var(--x)}
+  .net.xlong{color:var(--xlong)}
+  .net.nostr{color:var(--nostr)}
+  .post-body{background:#0f1216;border:1px solid var(--border);border-radius:10px;padding:10px 12px;white-space:pre-wrap;font-family:var(--mono);font-size:13px;min-height:60px}
+  textarea.post-body{display:block;width:100%;min-height:150px;resize:vertical;line-height:1.45}
+  .post-meta{display:flex;align-items:center;justify-content:space-between;margin-top:8px;font-size:12px;color:var(--muted)}
+  .count.warn{color:var(--warn)}
+  .post-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+  .checklist{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:8px}
+  .checklist label{display:flex;align-items:flex-start;gap:8px;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:10px;text-transform:none;letter-spacing:0;color:var(--text);font-size:13px;margin:0;cursor:pointer}
+  .checklist input{margin-top:3px}
+
+  .quicklaunch{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+  .empty{padding:40px;text-align:center;color:var(--muted)}
+  .empty h3{color:var(--text);margin:0 0 6px}
+
+  .footer{margin-top:30px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+  /* toast */
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ok);color:#0b0d10;padding:10px 16px;border-radius:10px;font-weight:600;font-size:13px;opacity:0;pointer-events:none;transition:all .25s}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand">
+    <div class="logo"><span class="dot"></span> Event Poster</div>
+    <div class="subtitle">Turn Luma events into X + Nostr campaigns.</div>
+  </div>
+  <div class="header-actions">
+    <button class="btn ghost" id="btn-clear">Clear form</button>
+    <a class="btn ghost" href="https://github.com/orangedaddocs/event-poster" target="_blank" rel="noopener" id="repo-link">View on GitHub</a>
+    <a class="btn primary" href="https://luma.com" target="_blank" rel="noopener">Open Luma</a>
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- LEFT: form -->
+  <section class="panel">
+    <h2>Luma import</h2>
+    <div class="panel-body">
+      <label for="luma_import_url">Luma event URL</label>
+      <input type="text" id="luma_import_url" placeholder="https://luma.com/tsija7uu" />
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn primary" id="btn-import-luma">Import from Luma</button>
+        <button type="button" class="btn ghost" id="btn-toggle-luma-paste">Paste Luma text/HTML</button>
+      </div>
+      <div id="luma-paste-wrap" hidden>
+        <label for="luma_paste">Luma page text or HTML</label>
+        <textarea id="luma_paste" placeholder="If browser import is blocked, paste the Luma page source or copied event text here."></textarea>
+        <div style="margin-top:10px">
+          <button type="button" class="btn" id="btn-parse-luma-paste">Use pasted Luma content</button>
+        </div>
+      </div>
+      <div class="import-status" id="import-status">The Luma event is the source of truth; the fields below are just for edits.</div>
+    </div>
+
+    <h2 style="border-top:1px solid var(--border)">Event details</h2>
+    <div class="panel-body">
+      <input type="hidden" id="title" />
+
+      <label for="date">Date / time</label>
+      <input type="text" id="date" placeholder="Imported from Luma" />
+
+      <label for="speaker">Speaker(s)</label>
+      <input type="text" id="speaker" placeholder="Speaker name" />
+
+      <label for="speaker_x">Speaker X handle (optional)</label>
+      <input type="text" id="speaker_x" placeholder="@speaker" />
+
+      <label for="speaker_nostr">Speaker Nostr npub (optional)</label>
+      <input type="text" id="speaker_nostr" placeholder="npub1..." />
+
+      <label for="hook">Hook / one-liner</label>
+      <textarea id="hook" placeholder="Short event hook or one-liner"></textarea>
+
+      <label for="luma">Luma / RSVP URL</label>
+      <input type="text" id="luma" placeholder="https://luma.com/..." />
+
+      <label for="youtube">YouTube recording URL (optional)</label>
+      <input type="text" id="youtube" placeholder="https://youtube.com/watch?v=..." />
+
+      <label for="hashtags">Hashtags (space separated)</label>
+      <input type="text" id="hashtags" placeholder="#Bitcoin #Denver #Nostr" />
+
+      <label>Tone</label>
+      <div class="toneset" id="toneset">
+        <label data-tone="punchy"><span>🥊 Punchy</span><span class="tone-desc">Short, energetic, hype</span><input type="radio" name="tone" value="punchy" /></label>
+        <label data-tone="educational"><span>📚 Educational</span><span class="tone-desc">Why it matters, what you'll learn</span><input type="radio" name="tone" value="educational" checked /></label>
+        <label data-tone="cypherpunk"><span>🕶️ Cypherpunk</span><span class="tone-desc">Sovereignty, signal not noise</span><input type="radio" name="tone" value="cypherpunk" /></label>
+        <label data-tone="welcoming"><span>🤝 Welcoming</span><span class="tone-desc">Newcomers, community first</span><input type="radio" name="tone" value="welcoming" /></label>
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn primary" id="btn-generate">Generate posts</button>
+      </div>
+    </div>
+
+    <h2 style="border-top:1px solid var(--border)">Or load a seeded event</h2>
+    <div class="seed" id="seed"></div>
+  </section>
+
+  <!-- RIGHT: output -->
+  <section>
+    <div id="output">
+      <div class="panel empty">
+        <h3>Paste a Luma event or click a seeded event</h3>
+        <div>You'll get 6 stages with short X, long X, and Nostr copy — ready to copy.</div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:16px" id="checklist-panel" hidden>
+      <h2>15-min posting checklist</h2>
+      <div class="panel-body">
+        <div class="checklist">
+          <label><input type="checkbox" /> Tag speaker on X + paste Nostr npub if available</label>
+          <label><input type="checkbox" /> Add 1 image (event flyer, speaker headshot, or venue shot)</label>
+          <label><input type="checkbox" /> Post Announcement on both X + Nostr right now</label>
+          <label><input type="checkbox" /> Schedule 7-day reminder (calendar or scheduler)</label>
+          <label><input type="checkbox" /> Schedule 24-hr reminder</label>
+          <label><input type="checkbox" /> Day-of: post the Live update at start</label>
+          <label><input type="checkbox" /> Day-after: post Follow-up + recording link</label>
+          <label><input type="checkbox" /> When YouTube is live: post the recap and put the video link in the reply</label>
+          <label><input type="checkbox" /> Repost to the event thread or community channel</label>
+        </div>
+        <div class="quicklaunch">
+          <a class="btn" target="_blank" rel="noopener" href="https://x.com/compose/post">↗ Open X compose</a>
+          <a class="btn" target="_blank" rel="noopener" href="https://primal.net/home">↗ Open Primal (Nostr)</a>
+          <a class="btn" target="_blank" rel="noopener" href="https://damus.io">↗ Open Damus</a>
+          <a class="btn" target="_blank" rel="noopener" href="https://highlighter.com">↗ Highlighter (long-form Nostr)</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="footer">
+  <div>Free, open-source, no backend. Built around Luma events.</div>
+  <div>v2 · <a href="#" id="rebuild-link">Rebuild with Claude Code / Codex</a></div>
+</div>
+
+</div>
+
+<div class="toast" id="toast">Copied</div>
+
+<script>
+/* =========================================================
+   Event Poster — vanilla JS, no build step
+   ========================================================= */
+
+const X_LIMIT = 280;
+const X_LONG_SOFT_LIMIT = 2000;
+const NOSTR_SOFT_LIMIT = 500; // Nostr has no hard limit, but readability matters
+
+const FALLBACK_DATA = {
+  venue: { name:'Denver Bitcoin meetup', city:'Denver', default_hashtags:['#Bitcoin', '#Denver', '#Nostr'] },
+  events: [
+    {
+      id:'bitcoin-in-healthcare-2026-05-28',
+      title:'Bitcoin in Healthcare w/ Dr. Noah Kaufman',
+      date_iso:'2026-05-28T18:30:00-06:00',
+      date_display:'Thu, May 28 · 6:30 PM MDT',
+      host:'Denver Bitcoin meetup',
+      speaker:'Dr. Noah Kaufman',
+      speaker_org:'KaufCare Advanced Urgent Care',
+      speaker_x:'',
+      speaker_nostr:'',
+      description:'How do you build a modern medical practice on a Bitcoin standard? An evening with a Denver physician and Bitcoiner on integrating Bitcoin into corporate operations, decentralized healthcare, and sovereign money. Drinks + networking.',
+      topic_tags:['healthcare', 'sovereignty', 'operations'],
+      hashtags:['#Bitcoin', '#BitcoinStandard', '#Healthcare'],
+      luma_url:'https://luma.com/pks2tmn1',
+      tone:'educational'
+    },
+    {
+      id:'denver-bitdevs-2026-06-04',
+      title:'Denver BitDevs w/ Rob Warren',
+      date_iso:'2026-06-04T17:00:00-06:00',
+      date_display:'Thu, Jun 4 · 5:00 PM MDT',
+      host:'Denver Bitcoin meetup',
+      speaker:'Rob Warren',
+      speaker_org:'Bitcoin Park',
+      speaker_x:'@robertwarren',
+      speaker_nostr:'',
+      description:'Rob Warren (Head of Research & Education) on practical energy strategies for Bitcoin. Members social hour at 5pm, main event 6-8pm. Pizza provided. Expert-level.',
+      topic_tags:['mining', 'energy', 'research'],
+      hashtags:['#Bitcoin', '#BitDevs', '#Mining'],
+      luma_url:'https://luma.com/yj1xgw3q',
+      tone:'cypherpunk'
+    },
+    {
+      id:'bitcoin-beer-art-auction-2026-06-12',
+      title:'Bitcoin, Beer & Live Art Auction',
+      date_iso:'2026-06-12T15:30:00-06:00',
+      date_display:'Fri, Jun 12 · 3:30 PM MDT',
+      host:'Denver Bitcoin meetup',
+      speaker:'',
+      speaker_org:'',
+      speaker_x:'',
+      speaker_nostr:'',
+      description:'Bitcoin + beer social tuned into a live art auction on Scarce.city. Hang out, drink, and bid on Bitcoin art.',
+      topic_tags:['social', 'art', 'community'],
+      hashtags:['#Bitcoin', '#BitcoinArt', '#ScarceCity'],
+      luma_url:'https://luma.com/b1n1icdn',
+      tone:'welcoming'
+    }
+  ]
+};
+let VENUE = FALLBACK_DATA.venue;
+let EVENTS = FALLBACK_DATA.events.slice();
+
+/* ---------- Tone presets ---------- */
+const TONES = {
+  punchy: {
+    intro:    ["Mark your calendar.", "Lock it in.", "This one's huge.", "Don't sleep on this."],
+    cta:      ["RSVP now →", "Grab a spot →", "Get on the list →", "We'll see you there →"],
+    reminder: ["{days} days.", "{days} days out.", "We're close.", "Almost time."],
+    day:      ["Tomorrow.", "24 hours.", "1 sleep.", "It's happening tomorrow."],
+    live:     ["LIVE NOW.", "Doors open. Pull up.", "It's go time.", "Started. Come through."],
+    followup: ["What a night.", "That was 🔥.", "Recap drop.", "If you missed it —"],
+  },
+  educational: {
+    intro:    ["New event:", "Up next:", "Join us for:", "Coming up:"],
+    cta:      ["Free RSVP →", "Save your seat →", "More details + RSVP →", "Sign up to attend →"],
+    reminder: ["{days} days until {title_short}.", "Reminder: {title_short} in {days} days.", "Coming up in {days} days:"],
+    day:      ["Tomorrow:", "24 hours out:", "We're 1 day away:"],
+    live:     ["Happening now:", "Live now:", "We're live with"],
+    followup: ["Thanks to everyone who came out for", "Recap:", "Here's what we covered:"],
+  },
+  cypherpunk: {
+    intro:    ["Signal:", "Sovereignty drop:", "From the underground:", "For the orange-pilled:"],
+    cta:      ["RSVP. No KYC.", "Show up. Stay sovereign.", "Lock in →", "Reserve your seat. Cash welcome."],
+    reminder: ["{days} blocks-ish until we meet.", "T-minus {days} days.", "{days} days. Be there."],
+    day:      ["Tomorrow. Be there.", "24h. No excuses.", "1 sleep until signal."],
+    live:     ["We're live. No retreat.", "LIVE now.", "On-chain in spirit. Live in person."],
+    followup: ["That's a wrap.", "If you weren't there — fix that next time.", "Notes from the front lines:"],
+  },
+  welcoming: {
+    intro:    ["You're invited:", "Come hang with us:", "All welcome:", "New to Bitcoin? Start here:"],
+    cta:      ["Free + open to everyone →", "First time? Just show up →", "RSVP and say hi →", "Bring a friend →"],
+    reminder: ["Just {days} days until we hang out again.", "{days} days out. Hope to see you.", "Counting down — {days} days."],
+    day:      ["See you tomorrow.", "We're 1 day out — looking forward to it.", "Tomorrow we hang."],
+    live:     ["We're live. Door's open — come on in.", "Started, but pull up anytime.", "Hanging out now."],
+    followup: ["Thanks for hanging with us.", "What a fun crowd.", "Loved having everyone."],
+  }
+};
+
+/* ---------- Helpers ---------- */
+function el(html){ const t=document.createElement('template'); t.innerHTML=html.trim(); return t.content.firstChild; }
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function shortTitle(t){ return t.length>40 ? t.slice(0,37)+'…' : t; }
+function daysUntil(iso){
+  if(!iso) return null;
+  const now = new Date();
+  const then = new Date(iso);
+  return Math.max(0, Math.round((then-now)/(1000*60*60*24)));
+}
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg||'Copied'; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1400); }
+function copy(text){ navigator.clipboard.writeText(text).then(()=>toast('Copied')); }
+function postText(id){
+  const node = document.getElementById(id);
+  return 'value' in node ? node.value : node.innerText;
+}
+function openXCompose(text){
+  window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+}
+function fmtHashtags(s){
+  if(!s) return '';
+  return s.split(/\s+/).filter(Boolean).map(h=> h.startsWith('#')?h:'#'+h).join(' ');
+}
+function venueLabel(){
+  return [VENUE.name, VENUE.city].filter(Boolean).join(' · ');
+}
+function sanitizeVenueText(s){
+  const oldVenue = String.fromCharCode(84,104,101,32,83,112,97,99,101);
+  const oldMember = String.fromCharCode(83,112,97,99,101,32,109,101,109,98,101,114);
+  const oldTag = String.fromCharCode(35,84,104,101,83,112,97,99,101);
+  return (s || '')
+    .replace(new RegExp(`\\b${oldVenue}\\b`, 'g'), 'the venue')
+    .replace(new RegExp(`\\b${oldMember}\\b`, 'gi'), 'community member')
+    .replace(new RegExp(`${oldTag}\\b`, 'g'), '#Bitcoin');
+}
+function decodeHtml(s){
+  const t = document.createElement('textarea');
+  t.innerHTML = s || '';
+  return t.value;
+}
+function normalizeLumaUrl(s){
+  const raw = (s || '').trim();
+  if(!raw) return '';
+  if(/^https?:\/\//i.test(raw)) return raw;
+  return `https://luma.com/${raw.replace(/^\/+/, '')}`;
+}
+function lumaSlug(url){
+  try{
+    return new URL(normalizeLumaUrl(url)).pathname.split('/').filter(Boolean)[0] || '';
+  }catch(e){
+    return (url || '').replace(/^https?:\/\/[^/]+\//, '').split(/[?#/]/)[0];
+  }
+}
+function findSeedByLumaUrl(url){
+  const slug = lumaSlug(url);
+  if(!slug) return null;
+  return EVENTS.find(ev => lumaSlug(ev.luma_url) === slug) || null;
+}
+function setImportStatus(msg, type){
+  const box = document.getElementById('import-status');
+  box.textContent = msg;
+  box.classList.toggle('ok', type==='ok');
+  box.classList.toggle('warn', type==='warn');
+}
+function formatLumaDate(iso){
+  if(!iso) return '';
+  const date = new Date(iso);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    weekday:'short', month:'short', day:'numeric',
+    hour:'numeric', minute:'2-digit', timeZone:'America/Denver', timeZoneName:'short'
+  }).formatToParts(date).reduce((acc, p)=>{ acc[p.type] = p.value; return acc; }, {});
+  return `${parts.weekday}, ${parts.month} ${parts.day} · ${parts.hour}:${parts.minute} ${parts.dayPeriod} ${parts.timeZoneName}`;
+}
+function docToText(node){
+  if(!node) return '';
+  if(typeof node==='string') return node;
+  if(Array.isArray(node)) return node.map(docToText).filter(Boolean).join('\n\n');
+  if(node.text) return node.text;
+  return docToText(node.content);
+}
+function findEventJsonLd(html){
+  const scripts = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi) || [];
+  for(const script of scripts){
+    const json = script.replace(/^<script[^>]*>/i, '').replace(/<\/script>$/i, '');
+    try{
+      const data = JSON.parse(decodeHtml(json));
+      const items = Array.isArray(data) ? data : [data];
+      const event = items.find(item => item && (item['@type']==='Event' || (Array.isArray(item['@type']) && item['@type'].includes('Event'))));
+      if(event) return event;
+    }catch(e){}
+  }
+  return null;
+}
+function findNextDataEvent(html){
+  const match = html.match(/<script id=["']__NEXT_DATA__["'] type=["']application\/json["']>([\s\S]*?)<\/script>/i);
+  if(!match) return null;
+  try{
+    const data = JSON.parse(decodeHtml(match[1]));
+    return data?.props?.pageProps?.initialData?.data || null;
+  }catch(e){ return null; }
+}
+function metaContent(html, key){
+  if(!html) return '';
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const patterns = [
+    new RegExp(`<meta\\b[^>]*(?:name|property)=["']${escaped}["'][^>]*content=["']([^"']*)["'][^>]*>`, 'i'),
+    new RegExp(`<meta\\b[^>]*content=["']([^"']*)["'][^>]*(?:name|property)=["']${escaped}["'][^>]*>`, 'i')
+  ];
+  for(const pattern of patterns){
+    const match = html.match(pattern);
+    if(match) return decodeHtml(match[1]);
+  }
+  return '';
+}
+function stripLumaTitle(title){
+  return (title || '').replace(/\s+·\s+Luma.*$/i, '').trim();
+}
+function cleanReaderLine(line){
+  return decodeHtml(line || '')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function readerTitle(raw){
+  const match = raw.match(/^Title:\s*(.+)$/mi);
+  return stripLumaTitle(match ? match[1] : '');
+}
+function readerUrl(raw, fallbackUrl){
+  const match = raw.match(/^URL Source:\s*(.+)$/mi);
+  return normalizeLumaUrl(match ? match[1] : fallbackUrl || '');
+}
+function readerDescription(lines){
+  const cleaned = lines.map(cleanReaderLine).filter(Boolean);
+  const aboutIndex = cleaned.findIndex(line => /^About Event$/i.test(line));
+  const skip = /^(Markdown Content:|Presented by|Hosted By|Register|Share|Add to Calendar|Calendar of events|See what's|Welcome!|To join|Subscribe|Contact the Host|Report Event)$/i;
+  const dateish = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{1,2}|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\b/i;
+  const pool = aboutIndex >= 0 ? cleaned.slice(aboutIndex + 1) : cleaned;
+  for(const line of pool){
+    if(skip.test(line) || dateish.test(line) || /^https?:\/\//i.test(line)) continue;
+    if(line.length > 20) return sanitizeVenueText(line);
+  }
+  return '';
+}
+function readerDate(lines){
+  const cleaned = lines.map(cleanReaderLine).filter(Boolean);
+  const dateLine = cleaned.find(line => /^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}/i.test(line));
+  const timeLine = cleaned.find(line => /\d{1,2}:\d{2}\s*(AM|PM)\s*[-–]\s*\d{1,2}:\d{2}\s*(AM|PM)/i.test(line));
+  if(!dateLine) return '';
+  const weekday = (dateLine.match(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i) || [])[1] || '';
+  const month = (dateLine.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*/i) || [])[0] || '';
+  const day = (dateLine.match(/\b\d{1,2}\b/) || [])[0] || '';
+  const startTime = timeLine ? (timeLine.match(/\d{1,2}:\d{2}\s*(AM|PM)/i) || [])[0] : '';
+  const tz = timeLine ? (timeLine.match(/\b[A-Z]{2,4}\b$/) || [])[0] : '';
+  const shortWeekday = weekday.slice(0, 3);
+  const shortMonth = month.slice(0, 3);
+  return [shortWeekday && `${shortWeekday}, ${shortMonth} ${day}`, startTime && `${startTime.toUpperCase()}${tz ? ` ${tz}` : ''}`].filter(Boolean).join(' · ');
+}
+async function fetchTextWithTimeout(url, timeoutMs){
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), timeoutMs);
+  try{
+    const res = await fetch(url, { signal: controller.signal });
+    if(!res.ok) throw new Error(`returned ${res.status}`);
+    return await res.text();
+  }finally{
+    clearTimeout(timer);
+  }
+}
+async function fetchLumaHtml(url){
+  const attempts = [
+    {
+      name: 'html proxy',
+      run: () => fetchTextWithTimeout(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, 15000)
+    },
+    {
+      name: 'alternate html proxy',
+      run: async () => {
+        const text = await fetchTextWithTimeout(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, 15000);
+        const data = JSON.parse(text);
+        return data.contents || '';
+      }
+    },
+    {
+      name: 'reader',
+      run: () => fetchTextWithTimeout(`https://r.jina.ai/http://r.jina.ai/http://${url}`, 20000)
+    }
+  ];
+  const errors = [];
+  for(const attempt of attempts){
+    try{
+      const text = await attempt.run();
+      if(text && (text.includes('application/ld+json') || text.includes('__NEXT_DATA__') || /^Title:/mi.test(text))) return text;
+      throw new Error('empty event data');
+    }catch(e){
+      errors.push(`${attempt.name}: ${e.message || e}`);
+    }
+  }
+  throw new Error(errors.join('; '));
+}
+function extractSpeaker(title, description){
+  const text = `${title || ''}\n${description || ''}`;
+  const patterns = [
+    /\bw\/\s*([A-Z][A-Za-z .'-]{2,60})/,
+    /hosted by(?: [A-Za-z ]+ member)?\s+([A-Z][A-Za-z .'-]{2,60}?)(?:\.|,| will| walking|$)/i,
+    /\bwith\s+([A-Z][A-Za-z .'-]{2,60}?)(?:\.|,| on | at |$)/
+  ];
+  for(const pattern of patterns){
+    const match = text.match(pattern);
+    if(match){
+      const name = match[1].trim();
+      if(!/^(the|a|an|local|this|our)\b/i.test(name)) return name;
+    }
+  }
+  return '';
+}
+function lumaToEvent(input, fallbackUrl){
+  const raw = input || '';
+  const html = raw.includes('<') ? raw : '';
+  const lines = raw.split(/\n+/).map(line=>line.trim()).filter(Boolean);
+  const jsonLd = html ? findEventJsonLd(html) : null;
+  const nextData = html ? findNextDataEvent(html) : null;
+  const nextEvent = nextData?.event || {};
+  const description = jsonLd?.description || docToText(nextData?.description_mirror) || metaContent(html, 'description') || metaContent(html, 'og:description') || readerDescription(lines);
+  const plainTitle = lines.find(line => line.length>4 && !/^https?:\/\//.test(line) && !/^(Register|Share|Add to Calendar|Hosted By)$/i.test(line));
+  const title = stripLumaTitle(jsonLd?.name || nextEvent.name || metaContent(html, 'og:title') || readerTitle(raw) || (raw.match(/(.+?)\s+·\s+Luma/) || [])[1] || plainTitle || '');
+  const plainDate = readerDate(lines) || lines.find(line => /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i.test(line) && /\d/.test(line)) || '';
+  const plainDescription = sanitizeVenueText(description || lines.filter(line => line!==title && line!==plainDate && !/^https?:\/\//.test(line)).slice(0, 5).join(' '));
+  const url = normalizeLumaUrl(jsonLd?.url || metaContent(html, 'og:url') || fallbackUrl || nextEvent.url || readerUrl(raw, fallbackUrl) || '');
+  const speaker = extractSpeaker(title, plainDescription);
+
+  if(!title) throw new Error('Could not find an event title in that Luma content.');
+
+  return {
+    id: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+    title: sanitizeVenueText(title),
+    date_iso: jsonLd?.startDate || nextEvent.start_at || '',
+    date_display: formatLumaDate(jsonLd?.startDate || nextEvent.start_at) || plainDate,
+    host: VENUE.name,
+    speaker,
+    speaker_org: '',
+    speaker_x: '',
+    speaker_nostr: '',
+    description: plainDescription,
+    hashtags: VENUE.default_hashtags || ['#Bitcoin', '#Denver'],
+    luma_url: url,
+    tone: 'educational',
+    image_url: Array.isArray(jsonLd?.image) ? jsonLd.image[0] : (jsonLd?.image || nextEvent.cover_url || '')
+  };
+}
+async function importLumaUrl(){
+  const url = normalizeLumaUrl(val('luma_import_url') || val('luma'));
+  if(!url){ setImportStatus('Paste a Luma event URL first.', 'warn'); return; }
+  setVal('luma_import_url', url);
+
+  const seeded = findSeedByLumaUrl(url);
+  if(seeded){
+    applyEvent(seeded);
+    setImportStatus('Loaded this Luma event from the included examples and generated the campaign.', 'ok');
+    return;
+  }
+
+  setImportStatus('Importing event details from Luma...', '');
+  try{
+    const html = await fetchLumaHtml(url);
+    const ev = lumaToEvent(html, url);
+    applyEvent(ev);
+    setImportStatus('Imported from Luma and generated the campaign.', 'ok');
+  }catch(e){
+    document.getElementById('luma-paste-wrap').hidden = false;
+    setImportStatus('Automatic import could not read that Luma page. Paste copied event text or page source below, then parse it here.', 'warn');
+  }
+}
+function importLumaPaste(){
+  try{
+    const ev = lumaToEvent(val('luma_paste'), val('luma_import_url') || val('luma'));
+    applyEvent(ev);
+    setImportStatus('Parsed pasted Luma content and generated the campaign.', 'ok');
+  }catch(e){
+    setImportStatus(e.message || 'Could not parse that Luma content.', 'warn');
+  }
+}
+function toggleLumaPaste(){
+  const wrap = document.getElementById('luma-paste-wrap');
+  wrap.hidden = !wrap.hidden;
+  setImportStatus(wrap.hidden ? 'The Luma event is the source of truth; the fields below are just for edits.' : 'Paste copied Luma event text or page source, then click Use pasted Luma content.', '');
+}
+function trimTo(s, limit){
+  if(!s || s.length<=limit) return s || '';
+  return s.slice(0, Math.max(0, limit-1)).replace(/\s+\S*$/, '').trimEnd() + '…';
+}
+function enforceXLimit(text){
+  let clean = text.trim().replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+  if(clean.length<=X_LIMIT) return clean;
+
+  let lines = clean.split('\n');
+  const protectedLine = line => /^https?:\/\//.test(line) || /^RSVP:/.test(line) || line.includes('luma.com') || line.startsWith('#') || /^📅/.test(line);
+
+  while(lines.join('\n').length>X_LIMIT){
+    let idx = -1;
+    let max = 0;
+    lines.forEach((line, i)=>{
+      if(!protectedLine(line) && line.length>max){
+        idx = i;
+        max = line.length;
+      }
+    });
+    if(idx<0 || max<18) break;
+    const over = lines.join('\n').length - X_LIMIT;
+    lines[idx] = trimTo(lines[idx], Math.max(18, lines[idx].length-over-2));
+  }
+
+  clean = lines.join('\n').trim();
+  if(clean.length<=X_LIMIT) return clean;
+
+  clean = lines.filter(line=>line.trim()).join('\n').trim();
+  if(clean.length<=X_LIMIT) return clean;
+
+  return trimTo(clean, X_LIMIT);
+}
+function cleanupPost(text){
+  return (text || '').trim().replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+}
+
+/* ---------- Post builder ---------- */
+function buildPosts(ev){
+  const tone = TONES[ev.tone] || TONES.educational;
+  const days = ev.date_iso ? daysUntil(ev.date_iso) : 7;
+  const speakerX = ev.speaker_x ? ev.speaker_x.startsWith('@')?ev.speaker_x:('@'+ev.speaker_x) : '';
+  const speakerNostr = ev.speaker_nostr || '';
+  const speakerLine = ev.speaker ? `with ${ev.speaker}${ev.speaker_org?` (${ev.speaker_org})`:''}` : '';
+  const hashtags = ev.hashtags || (VENUE.default_hashtags||[]).join(' ');
+  const lumaShort = ev.luma_url || '';
+  const youtube = ev.youtube_url || '';
+  const titleShort = shortTitle(ev.title || 'our next event');
+  const xReplyLine = lumaShort ? 'RSVP link in reply.' : 'Details in reply.';
+  const ytReplyLine = youtube ? 'YouTube link in reply.' : 'YouTube link goes in the reply when it is live.';
+
+  // ANNOUNCEMENT
+  const announceX = [
+    `${pick(tone.intro)} ${ev.title}`,
+    ev.date_display ? `📅 ${ev.date_display}` : '',
+    `📍 ${venueLabel()}`,
+    speakerX ? `🎤 ${speakerX}` : (ev.speaker ? `🎤 ${ev.speaker}`:''),
+    ev.hook ? `\n${ev.hook}` : '',
+    `\n${pick(tone.cta)} ${lumaShort}`,
+    hashtags ? `\n${hashtags}` : ''
+  ].filter(Boolean).join('\n');
+
+  const announceN = [
+    `${pick(tone.intro)} ${ev.title}`,
+    '',
+    ev.date_display ? `📅 ${ev.date_display}` : '',
+    `📍 ${venueLabel()}`,
+    ev.speaker ? `🎤 ${ev.speaker}${ev.speaker_org?` — ${ev.speaker_org}`:''}` : '',
+    speakerNostr ? `nostr:${speakerNostr}` : '',
+    '',
+    ev.hook || '',
+    '',
+    `${pick(tone.cta)}`,
+    lumaShort,
+    '',
+    hashtags
+  ].filter(x=>x!==undefined && x!==null).join('\n');
+
+  const announceXL = cleanupPost(`${ev.title}
+
+${ev.date_display ? `${ev.date_display}\n` : ''}${speakerLine ? `${speakerLine}\n` : ''}${venueLabel() ? `${venueLabel()}\n` : ''}
+${ev.hook || 'A new event is on the calendar.'}
+
+Why it is worth showing up:
+1. Learn from people doing the work.
+2. Meet other curious builders and Bitcoiners.
+3. Leave with something useful to keep exploring.
+
+${xReplyLine}
+${hashtags}`);
+
+  // 7-DAY
+  const remX = `${pick(tone.reminder).replace('{days}', Math.max(days,7)).replace('{title_short}', titleShort)}\n\n${ev.title} ${speakerLine}\n${ev.date_display||''}\n\nRSVP: ${lumaShort}\n${hashtags}`;
+  const remN = `${pick(tone.reminder).replace('{days}', Math.max(days,7)).replace('{title_short}', titleShort)}\n\n${ev.title}\n${speakerLine}\n${ev.date_display||''}\n\n${ev.hook||''}\n\nRSVP: ${lumaShort}\n\n${hashtags}`;
+  const remXL = cleanupPost(`${Math.max(days,7)} days out: ${ev.title}
+
+${ev.date_display || ''}
+${speakerLine || ''}
+
+${ev.hook || 'This is the kind of event that is easy to miss and worth having on the calendar.'}
+
+If you have a friend who has been asking better questions lately, this is a good one to bring them to.
+
+${xReplyLine}
+${hashtags}`);
+
+  // 24-HR
+  const dayX = `${pick(tone.day)}\n\n${ev.title}\n${ev.date_display||''} · ${venueLabel()}\n${speakerX || (ev.speaker?`w/ ${ev.speaker}`:'')}\n\n${lumaShort}\n${hashtags}`;
+  const dayN = `${pick(tone.day)}\n\n${ev.title}\n${speakerLine}\n${ev.date_display||''}\n📍 ${venueLabel()}\n\nLast chance to RSVP:\n${lumaShort}\n\n${hashtags}`;
+  const dayXL = cleanupPost(`Tomorrow: ${ev.title}
+
+${ev.date_display || ''}
+${venueLabel()}
+${speakerLine || ''}
+
+${ev.hook || 'One more reminder before this one happens.'}
+
+This is the nudge. RSVP if you are coming, bring someone curious, and show up ready for a good conversation.
+
+${xReplyLine}
+${hashtags}`);
+
+  // LIVE
+  const liveX = `${pick(tone.live)} ${speakerX||ev.speaker||''}\n\n"${ev.hook ? ev.hook.slice(0,140) : ev.title}"\n\n📍 ${venueLabel()}\n${hashtags}`;
+  const liveN = `${pick(tone.live)} ${ev.speaker||''}\n\n${ev.title}\n\n${ev.hook||''}\n\n📍 ${venueLabel()}\nCome through if you can.\n\n${hashtags}`;
+  const liveXL = cleanupPost(`${pick(tone.live)} ${ev.title}
+
+${ev.hook || ''}
+
+If you are nearby, now is the time to come through.
+
+${venueLabel()}
+${hashtags}`);
+
+  // FOLLOWUP
+  const fuX = `${pick(tone.followup)} ${ev.title}${speakerX?` · ${speakerX}`:''}\n\nKey takeaways 🧵\n1.\n2.\n3.\n\nRecording dropping soon. Big thanks to everyone who came out.\n${hashtags}`;
+  const fuN = `${pick(tone.followup)} ${ev.title}${ev.speaker?` with ${ev.speaker}`:''}.\n\nThree things worth carrying home:\n1. \n2. \n3. \n\nRecording: [paste link]\n\nNext time, bring a friend.\n\n${hashtags}`;
+  const fuXL = cleanupPost(`${pick(tone.followup)} ${ev.title}
+
+A few takeaways worth carrying forward:
+1.
+2.
+3.
+
+Big thanks to everyone who showed up, asked good questions, and kept the conversation going.
+
+Recording link goes in the reply when it is ready.
+${hashtags}`);
+
+  // YOUTUBE RECAP
+  const ytX = cleanupPost(`Recording is up: ${ev.title}
+
+One useful idea from the conversation:
+
+[add takeaway]
+
+${ytReplyLine}
+${hashtags}`);
+  const ytXL = cleanupPost(`Recording is up from ${ev.title}.
+
+This is the follow-up for everyone who wanted to be there but could not make it.
+
+Watch for:
+1. [add moment or topic]
+2. [add useful quote or idea]
+3. [add practical takeaway]
+
+The best events keep helping people after the room clears. This is the piece that lets the conversation travel.
+
+${ytReplyLine}
+${hashtags}`);
+  const ytN = cleanupPost(`Recording is up: ${ev.title}
+
+Three things worth watching for:
+1. 
+2. 
+3. 
+
+YouTube: ${youtube || '[paste YouTube link]'}
+
+${hashtags}`);
+
+  return [
+    { stage:'Announcement', when:'Now — when event is published', x:enforceXLimit(announceX), xlong:announceXL, nostr:announceN.trim() },
+    { stage:'7-day reminder', when:`7 days before · approx ${days} days out`, x:enforceXLimit(remX), xlong:remXL, nostr:remN.trim() },
+    { stage:'24-hr reminder', when:'1 day before', x:enforceXLimit(dayX), xlong:dayXL, nostr:dayN.trim() },
+    { stage:'Live update', when:'Day-of, at start time', x:enforceXLimit(liveX), xlong:liveXL, nostr:liveN.trim() },
+    { stage:'Follow-up', when:'Day after · before recording is posted', x:enforceXLimit(fuX), xlong:fuXL, nostr:fuN.trim() },
+    { stage:'YouTube recap', when:'After the recording is live', x:enforceXLimit(ytX), xlong:ytXL, nostr:ytN },
+  ];
+}
+
+/* ---------- Render ---------- */
+function renderOutput(ev){
+  const posts = buildPosts(ev);
+  const out = document.getElementById('output');
+  out.innerHTML = '';
+  posts.forEach((p, i) => {
+    const stage = el(`
+      <div class="stage">
+        <div class="stage-head">
+          <div class="title"><span class="badge">${i+1} / ${posts.length}</span> ${p.stage}</div>
+          <div class="when">${p.when}</div>
+        </div>
+        <div class="posts">
+          <div class="post">
+            <div class="post-head">
+              <span class="net x">𝕏 — X / Twitter</span>
+              <div class="post-actions">
+                <button class="btn small" data-copy="x-${i}">Copy</button>
+                <button class="btn small" data-open-x="x-${i}">Open in X</button>
+              </div>
+            </div>
+            <textarea class="post-body" id="x-${i}" spellcheck="true">${escapeHtml(p.x)}</textarea>
+            <div class="post-meta">
+              <span class="count${p.x.length>X_LIMIT?' warn':''}" data-target="x-${i}" data-limit="${X_LIMIT}">${p.x.length} / ${X_LIMIT}</span>
+              <span>${p.x.length>X_LIMIT?'⚠️ trim required':''}</span>
+            </div>
+          </div>
+          <div class="post">
+            <div class="post-head">
+              <span class="net xlong">𝕏 — Long / link-light</span>
+              <div class="post-actions">
+                <button class="btn small" data-copy="xl-${i}">Copy</button>
+              </div>
+            </div>
+            <textarea class="post-body" id="xl-${i}" spellcheck="true">${escapeHtml(p.xlong)}</textarea>
+            <div class="post-meta">
+              <span class="count${p.xlong.length>X_LONG_SOFT_LIMIT?' warn':''}" data-target="xl-${i}" data-limit="${X_LONG_SOFT_LIMIT}">${p.xlong.length} chars</span>
+              <span>${p.xlong.includes('http')?'has link':'no main-post link'}</span>
+            </div>
+          </div>
+          <div class="post">
+            <div class="post-head">
+              <span class="net nostr">⚡ Nostr</span>
+              <div class="post-actions">
+                <button class="btn small" data-copy="n-${i}">Copy</button>
+              </div>
+            </div>
+            <textarea class="post-body" id="n-${i}" spellcheck="true">${escapeHtml(p.nostr)}</textarea>
+            <div class="post-meta">
+              <span class="count" data-target="n-${i}" data-limit="${NOSTR_SOFT_LIMIT}">${p.nostr.length} chars</span>
+              <span>${p.nostr.length>NOSTR_SOFT_LIMIT?'(long — consider Highlighter)':''}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `);
+    out.appendChild(stage);
+  });
+  document.getElementById('checklist-panel').hidden = false;
+  out.querySelectorAll('[data-copy]').forEach(b=>{
+    b.addEventListener('click', ()=> copy(postText(b.dataset.copy)));
+  });
+  out.querySelectorAll('[data-open-x]').forEach(b=>{
+    b.addEventListener('click', ()=> openXCompose(postText(b.dataset.openX)));
+  });
+  out.querySelectorAll('.post-body').forEach(editor=>{
+    editor.addEventListener('input', ()=> updateCount(editor.id));
+  });
+}
+
+function updateCount(targetId){
+  const count = document.querySelector(`.count[data-target="${targetId}"]`);
+  if(!count) return;
+  const limit = Number(count.dataset.limit || 0);
+  const text = postText(targetId);
+  const length = text.length;
+  const isShortX = limit === X_LIMIT;
+  count.textContent = isShortX ? `${length} / ${limit}` : `${length} chars`;
+  count.classList.toggle('warn', !!limit && length > limit);
+  const note = count.nextElementSibling;
+  if(note && isShortX) note.textContent = length > limit ? '⚠️ trim required' : '';
+  if(note && targetId.startsWith('xl-')) note.textContent = text.includes('http') ? 'has link' : 'no main-post link';
+}
+
+function escapeHtml(s){ return s.replace(/[&<>]/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c])); }
+
+/* ---------- Form ---------- */
+function readForm(){
+  const tone = document.querySelector('input[name=tone]:checked')?.value || 'educational';
+  return {
+    title: val('title'),
+    date_display: val('date'),
+    date_iso: '', // user form doesn't require ISO; seeded events provide it
+    speaker: val('speaker'),
+    speaker_x: val('speaker_x'),
+    speaker_nostr: val('speaker_nostr'),
+    hook: val('hook'),
+    luma_url: val('luma'),
+    youtube_url: val('youtube'),
+    hashtags: fmtHashtags(val('hashtags')),
+    tone
+  };
+}
+function val(id){ return document.getElementById(id).value.trim(); }
+function setVal(id,v){ document.getElementById(id).value = v||''; }
+function applyEvent(ev){
+  setVal('luma_import_url', ev.luma_url);
+  setVal('title', ev.title);
+  setVal('date', ev.date_display);
+  setVal('speaker', ev.speaker);
+  setVal('speaker_x', ev.speaker_x);
+  setVal('speaker_nostr', ev.speaker_nostr);
+  setVal('hook', ev.description || ev.hook);
+  setVal('luma', ev.luma_url);
+  setVal('youtube', ev.youtube_url);
+  setVal('hashtags', (ev.hashtags||[]).join ? ev.hashtags.join(' ') : (ev.hashtags||''));
+  if(ev.tone){
+    const radio = document.querySelector(`input[name=tone][value="${ev.tone}"]`);
+    if(radio) radio.checked = true;
+  }
+  syncToneUI();
+  const merged = Object.assign({}, ev, readForm(), { date_iso: ev.date_iso, hashtags: fmtHashtags((ev.hashtags||[]).join? ev.hashtags.join(' ') : (ev.hashtags||'')) });
+  renderOutput(merged);
+  window.scrollTo({ top: document.getElementById('output').offsetTop - 20, behavior:'smooth' });
+}
+
+function syncToneUI(){
+  document.querySelectorAll('#toneset label').forEach(l=>{
+    const r = l.querySelector('input');
+    l.classList.toggle('on', r.checked);
+  });
+}
+
+/* ---------- Seeded events ---------- */
+function renderSeeds(){
+  const wrap = document.getElementById('seed');
+  wrap.innerHTML = '';
+  EVENTS.forEach(ev=>{
+    const b = el(`<button class="btn"><b>${escapeHtml(ev.title)}</b><span>${escapeHtml(ev.date_display||'')}</span></button>`);
+    b.addEventListener('click', ()=> applyEvent(ev));
+    wrap.appendChild(b);
+  });
+}
+
+/* ---------- Init ---------- */
+async function loadEvents(){
+  try{
+    const res = await fetch('events.json', {cache:'no-store'});
+    if(res.ok){
+      const data = await res.json();
+      VENUE = data.venue || VENUE;
+      EVENTS = data.events || [];
+      renderSeeds();
+    }
+  }catch(e){ console.warn('events.json not loaded (running offline):', e); }
+}
+
+function init(){
+  renderSeeds();
+  syncToneUI();
+
+  document.getElementById('toneset').addEventListener('change', syncToneUI);
+  document.addEventListener('click', e=>{
+    if(e.target.closest('#btn-import-luma')) importLumaUrl();
+    if(e.target.closest('#btn-toggle-luma-paste')) toggleLumaPaste();
+    if(e.target.closest('#btn-parse-luma-paste')) importLumaPaste();
+  });
+  document.getElementById('btn-generate').addEventListener('click', ()=>{
+    const ev = readForm();
+    if(!ev.title){ alert('Add an event title first.'); return; }
+    renderOutput(ev);
+    window.scrollTo({ top: document.getElementById('output').offsetTop - 20, behavior:'smooth' });
+  });
+  document.getElementById('btn-clear').addEventListener('click', ()=>{
+    ['luma_import_url','luma_paste','title','date','speaker','speaker_x','speaker_nostr','hook','luma','youtube','hashtags'].forEach(id=>setVal(id,''));
+    document.querySelector('input[name=tone][value=educational]').checked = true;
+    syncToneUI();
+    document.getElementById('luma-paste-wrap').hidden = true;
+    setImportStatus('The Luma event is the source of truth; the fields below are just for edits.', '');
+    document.getElementById('output').innerHTML = `<div class="panel empty"><h3>Paste a Luma event or click a seeded event</h3><div>You'll get 6 stages with short X, long X, and Nostr copy — ready to copy.</div></div>`;
+    document.getElementById('checklist-panel').hidden = true;
+  });
+  document.getElementById('rebuild-link').addEventListener('click', e=>{ e.preventDefault(); window.open('./BUILD_SPEC.md','_blank'); });
+  loadEvents();
+}
+init();
+</script>
+</body>
+</html>
