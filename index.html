@@ -266,6 +266,44 @@ function fmtHashtags(s){
   if(!s) return '';
   return s.split(/\s+/).filter(Boolean).map(h => h.startsWith('#') ? h : '#'+h).join(' ');
 }
+function fmtParts(iso, tz){
+  const opts = { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short' };
+  if(tz) opts.timeZone = tz;
+  const parts = new Intl.DateTimeFormat('en-US', opts).formatToParts(new Date(iso))
+    .reduce((a,p) => (a[p.type] = p.value, a), {});
+  return parts;
+}
+function formatEventTime(iso, tz){
+  if(!iso) return '';
+  try{
+    const p = fmtParts(iso, tz);
+    return `${p.weekday}, ${p.month} ${p.day} · ${p.hour}:${p.minute} ${p.dayPeriod} ${p.timeZoneName}`
+      .replace(/[  ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }catch(e){ return ''; }
+}
+function clockIn(iso, tz){
+  const p = fmtParts(iso, tz);
+  return `${p.hour}:${p.minute} ${p.dayPeriod} ${p.timeZoneName}`
+    .replace(/[  ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function timezoneConversions(iso, tz){
+  if(!iso) return '';
+  const zones = [tz || 'America/Denver', 'America/New_York', 'America/Los_Angeles'];
+  const seen = new Set();
+  const out = [];
+  for(const z of zones){
+    let label;
+    try{ label = clockIn(iso, z); }catch(e){ continue; }
+    if(seen.has(label)) continue;
+    seen.add(label);
+    out.push(label);
+  }
+  return out.join(' · ');
+}
 /* ENGINE-END */
 
 const FALLBACK_DATA = {

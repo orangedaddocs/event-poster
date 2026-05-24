@@ -26,3 +26,29 @@ test('lumaSlug extracts the first path segment', () => {
   assert.equal(engine.lumaSlug('https://luma.com/mrxb609z?lm_source=embed'), 'mrxb609z');
   assert.equal(engine.lumaSlug('pks2tmn1'), 'pks2tmn1');
 });
+
+test('formatEventTime renders in the event zone with short tz label', () => {
+  const out = engine.formatEventTime('2026-05-28T18:30:00-06:00', 'America/Denver');
+  assert.match(out, /Thu, May 28/);
+  assert.match(out, /6:30 ?PM MDT|6:30 PM MDT/);
+});
+
+test('formatEventTime infers zone from offset when IANA missing', () => {
+  const out = engine.formatEventTime('2026-05-28T18:30:00-06:00', '');
+  assert.match(out, /6:30 PM|6:30 PM/);
+});
+
+test('timezoneConversions returns deduped local+ET+PT, DST-correct', () => {
+  const conv = engine.timezoneConversions('2026-05-28T19:00:00-06:00', 'America/Denver');
+  assert.match(conv, /7:00 PM MDT/);
+  assert.match(conv, /9:00 PM EDT/);
+  assert.match(conv, /6:00 PM PDT/);
+  assert.equal(conv.split('·').length, 3);
+});
+
+test('timezoneConversions dedupes when event is already Eastern', () => {
+  const conv = engine.timezoneConversions('2026-05-28T21:00:00-04:00', 'America/New_York');
+  assert.equal(conv.split('·').length, 2);
+  assert.match(conv, /9:00 PM EDT/);
+  assert.match(conv, /6:00 PM PDT/);
+});
